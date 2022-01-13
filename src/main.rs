@@ -6,29 +6,23 @@ use anyhow::Result;
 use clap::{App, Arg, ArgMatches, SubCommand};
 use mdbook::preprocess::{CmdPreprocessor, Preprocessor};
 use std::io;
-use std::process;
 
-fn make_app() -> App<'static, 'static> {
-    App::new("mdbook-git-info")
+fn main() -> Result<()> {
+    let matches =  App::new("mdbook-git-info")
         .about("A mdbook preprocessor which extracts metadata from Git and adds it to the chapters of the book")
         .subcommand(
             SubCommand::with_name("supports")
                 .arg(Arg::with_name("renderer").required(true))
                 .about("Check whether a renderer is supported by this preprocessor")
-        )
-}
+        ).get_matches();
 
-fn main() {
-    let matches = make_app().get_matches();
-
-    // Users will want to construct their own preprocessor here
     let preprocessor = GitInfoPreprocessor::new();
 
+    // Dispatch to the correct function
     if let Some(sub_args) = matches.subcommand_matches("supports") {
-        handle_supports(preprocessor, sub_args);
-    } else if let Err(e) = handle_preprocessing(preprocessor) {
-        eprintln!("{:?}", e);
-        process::exit(1);
+        handle_supports(preprocessor, sub_args)
+    } else {
+        handle_preprocessing(preprocessor)
     }
 }
 
@@ -55,13 +49,12 @@ fn handle_preprocessing(pre: impl Preprocessor) -> Result<()> {
 }
 
 /// Check to see if we support the processor, taken straight out of the mdbook book
-fn handle_supports(pre: impl Preprocessor, sub_args: &ArgMatches) -> ! {
+fn handle_supports(pre: impl Preprocessor, sub_args: &ArgMatches) -> Result<()> {
     let renderer = sub_args.value_of("renderer").expect("Required argument");
-    let supported = pre.supports_renderer(renderer);
 
-    if supported {
-        process::exit(0);
+    if pre.supports_renderer(renderer) {
+        Ok(())
     } else {
-        process::exit(1);
+        Err(anyhow::anyhow!("Unsupported renderer {}", renderer))
     }
 }

@@ -4,6 +4,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 /// A single entry of the git log.
+#[derive(Debug)]
 pub struct GitHistoryEntry {
     pub author: String,
     pub timestamp: DateTime<Utc>,
@@ -21,11 +22,9 @@ pub fn extract(path: impl AsRef<Path>) -> Result<Vec<GitHistoryEntry>> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .with_context(|| {
-            format!("Failed to launch `git log`. Is git installed and available in $PATH?")
-        })?
+        .context("Failed to launch `git log`. Is git installed and available in $PATH?")?
         .wait_with_output()
-        .with_context(|| format!("Failed to wait on `git log`"))?;
+        .context("Failed to wait on `git log`")?;
 
     // Check the result of the invocation
     if !output.status.success() {
@@ -41,27 +40,26 @@ pub fn extract(path: impl AsRef<Path>) -> Result<Vec<GitHistoryEntry>> {
     let log = String::from_utf8(output.stdout)
         .context("Invalid UTF-8 output from git")?
         .lines()
-        .map(|line| {
-            line.trim_matches('"')
-                .split('\t')
-                .collect::<GitHistoryEntry>()
-        })
-        .collect::<Vec<_>>();
+        .map(|line| history_entry_from_iter(line.trim_matches('"').split('\t')))
+        .collect::<Result<Vec<_>>>()?;
 
     Ok(log)
 }
 
-impl<'a> FromIterator<&'a str> for GitHistoryEntry {
-    fn from_iter<T: IntoIterator<Item = &'a str>>(iter: T) -> Self {
-        let mut it = iter.into_iter();
-        let author = it.next().unwrap().to_string();
-        let timestamp = it.next().unwrap();
+fn history_entry_from_iter<'a, T: IntoIterator<Item = &'a str>>(
+    iter: T,
+) -> Result<GitHistoryEntry> {
+    let mut it = iter.into_iter();
+    let author = it
+        .next()
+        .context("Unexpected git output format")?
+        .to_string();
+    let timestamp = it.next().context("Unexpected git output format")?;
 
-        GitHistoryEntry {
-            author,
-            timestamp: DateTime::parse_from_rfc3339(timestamp)
-                .unwrap()
-                .with_timezone(&Utc),
-        }
-    }
+    Ok(GitHistoryEntry {
+        author,
+        timestamp: DateTime::parse_from_rfc3339(timestamp)
+            .unwrap()
+            .with_timezone(&Utc),
+    })
 }

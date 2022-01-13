@@ -22,12 +22,12 @@ impl Preprocessor for GitInfoPreprocessor {
     fn run(&self, ctx: &PreprocessorContext, mut book: Book) -> Result<Book> {
         // Visit each chapter of the book and accumulate and stop at the first error
         let mut error = None;
-        book.for_each_mut(|book| {
+        book.for_each_mut(|book_item| {
             if error.is_some() {
                 return;
             }
 
-            if let BookItem::Chapter(chapter) = book {
+            if let BookItem::Chapter(chapter) = book_item {
                 if let Err(e) = enrich_chapter(ctx, chapter) {
                     error = Some(e.context(format!("Chapter name: {}", chapter.name)));
                 }
@@ -75,14 +75,16 @@ fn enrich_chapter(ctx: &PreprocessorContext, chapter: &mut Chapter) -> Result<()
         | Created on | Created by | Last edit on | Last edit by | Other contributors |\n\
         | :---: | :---: | :---: | :---: | --- |\n\
         | **{}** | **{}** | **{}** | **{}** | {} |\n",
-        first_commit
-            .map(|c| c.timestamp.format("%d %b %Y").to_string())
-            .unwrap_or_else(|| "n/a".to_string()),
-        first_commit.map(|c| c.author.as_str()).unwrap_or("n/a"),
-        last_commit
-            .map(|c| c.timestamp.format("%d %b %Y").to_string())
-            .unwrap_or_else(|| "n/a".to_string()),
-        last_commit.map(|c| c.author.as_str()).unwrap_or("n/a"),
+        first_commit.map_or_else(
+            || "n/a".to_string(),
+            |c| c.timestamp.format("%d %b %Y").to_string()
+        ),
+        first_commit.map_or("n/a", |c| c.author.as_str()),
+        last_commit.map_or_else(
+            || "n/a".to_string(),
+            |c| c.timestamp.format("%d %b %Y").to_string()
+        ),
+        last_commit.map_or("n/a", |c| c.author.as_str()),
         other_contributors.join("<br>")
     ));
 
